@@ -26,6 +26,6 @@ jobs:
           cd ~/cyber-shield-backend
           git pull origin master
           npm install
-          npm run build
-          pm2 restart node-app || pm2 start dist/main.js --name "node-app"
+          npm run build || { echo "❌ Build failed"; exit 1; }
+          pm2 restart cyber-shield-api || pm2 start dist/main.js --name "cyber-shield-api"
         EOF
