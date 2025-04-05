@@ -1,0 +1,31 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan -H 3.107.74.30 >> ~/.ssh/known_hosts
+
+    - name: Deploy to EC2
+      run: |
+        ssh -i ~/.ssh/id_ed25519 ec2-user@3.107.74.30 << 'EOF'
+          cd ~/cyber-shield-backend
+          git pull origin master
+          npm install
+          npm run build
+          pm2 restart node-app || pm2 start dist/main.js --name "node-app"
+        EOF
