@@ -1,23 +1,71 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
-import axios, { AxiosResponse, AxiosError } from 'axios';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { AxiosError } from 'axios';
 import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import { catchError, timeout } from 'rxjs/operators';
+import { throwError } from 'rxjs';
+import {
+  GameResultRequest,
+  GameResultResponse,
+} from './interfaces/game-result.interface';
+import {
+  RawApiResponse,
+  RawComment,
+} from './interfaces/get-all-comments.interface';
 
-export interface RawComment {
-  comment_id: number;
-  comment_text: string;
-  comment_fake_name: string;
-}
-
-interface RawApiResponse {
-  Comments: RawComment[];
-}
-
+/**
+ * @description Service responsible for communicating with remote result API.
+ */
 @Injectable()
 export class FeedGameService {
-  constructor(private readonly configService: ConfigService) {}
+  private readonly logger = new Logger(FeedGameService.name);
+
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {}
 
   /**
-   * Get all comments using axios (no DTOs, just interface).
+   * @description Submit player's answers to remote API and return result.
+   * @param submission - An array of submitted answers from the player.
+   * @returns Remote game result including score, percent correct, and comparison.
+   * @throws Error if remote API call fails.
+   */
+  async submitCommentAnswers(
+    submission: GameResultRequest['submission'],
+  ): Promise<GameResultResponse> {
+    const url = this.configService.get<string>('SUBMIT_ANSWERS_API_URL');
+    if (!url) {
+      throw new Error(
+        'Missing SUBMIT_ANSWERS_API_URL in environment variables',
+      );
+    }
+    const body: GameResultRequest = { submission };
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post<GameResultResponse>(url, body).pipe(
+          timeout(5000),
+          catchError((error) => {
+            this.logger.error(
+              'Remote API request failed',
+              error?.message || error,
+            );
+            return throwError(() => new Error('Remote API request failed'));
+          }),
+        ),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.error('submitCommentAnswers failed', error?.message || error);
+      throw new Error('Failed to submit comment answers');
+    }
+  }
+
+  /**
+   * @description Fetch all raw comments from remote API configured in environment.
+   * @returns An object with success status, data if available, message and HTTP status code.
    */
   async getAllComments(): Promise<{
     success: boolean;
@@ -36,7 +84,9 @@ export class FeedGameService {
         };
       }
 
-      const response = await axios.get<RawApiResponse>(apiUrl);
+      const response = await firstValueFrom(
+        this.httpService.get<RawApiResponse>(apiUrl),
+      );
 
       if (!response.data || !Array.isArray(response.data.Comments)) {
         return {
@@ -54,6 +104,7 @@ export class FeedGameService {
       };
     } catch (error: unknown) {
       const err = error as AxiosError;
+      this.logger.error('Failed to fetch comments', err.message);
       return {
         success: false,
         message: err.message,
