@@ -48,12 +48,12 @@ export class FeedGameController {
     );
 
     return {
-      message: `You answered ${result.percent} of the questions correctly.`,
       score: result.score,
       answered: result.answered,
       answered_correct: result.answered_cor,
-      comparison: result.comparison,
+      percent: result.percent,
       submission_id: result.submission_id,
+      comparison: result.comparison,
     };
   }
 
