@@ -6,24 +6,25 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const allowedOriginsDev = ['*'];
-
-  // const allowedOriginsProd = [
+  // const allowedOrigins = [
   //   'https://cyber-shield-frontend.pages.dev',
   //   'https://worldwecreated.org',
   // ];
 
+  // app.enableCors({
+  //   origin: (origin, callback) => {
+  //     if (!origin || allowedOrigins.includes(origin)) {
+  //       callback(null, true);
+  //     } else {
+  //       callback(new Error('Not allowed by CORS'));
+  //     }
+  //   },
+  //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  //   allowedHeaders: ['Content-Type', 'X-Api-Key'],
+  //   credentials: false,
+  // });
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOriginsDev.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'X-Api-Key'],
-    credentials: false,
+    origin: '*',
   });
 
   app.useGlobalPipes(new ValidationPipe());
