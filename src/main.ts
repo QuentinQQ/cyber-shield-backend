@@ -6,10 +6,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const allowedOriginsDev = [
-    'https://cyber-shield-frontend.pages.dev',
-    'https://worldwecreated.org',
-  ];
+  const allowedOriginsDev = ['*'];
 
   // const allowedOriginsProd = [
   //   'https://cyber-shield-frontend.pages.dev',
