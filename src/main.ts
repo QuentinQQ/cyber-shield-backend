@@ -6,14 +6,19 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const allowedOrigins = [
+  const allowedOriginsDev = [
     'https://cyber-shield-frontend.pages.dev',
     'https://worldwecreated.org',
   ];
 
+  // const allowedOriginsProd = [
+  //   'https://cyber-shield-frontend.pages.dev',
+  //   'https://worldwecreated.org',
+  // ];
+
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOriginsDev.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
