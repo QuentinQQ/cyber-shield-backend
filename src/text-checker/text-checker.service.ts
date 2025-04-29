@@ -68,7 +68,7 @@ export class TextCheckerService {
             },
           )
           .pipe(
-            timeout(10000), // 10 second timeout
+            timeout(30000), // set 30 second timeout, this api needs a long time to process
             catchError((error) => {
               this.logger.error(
                 'Text analysis API request failed',
