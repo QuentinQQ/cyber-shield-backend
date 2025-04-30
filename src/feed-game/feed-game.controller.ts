@@ -9,6 +9,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { GameResultResponseV2 } from './interfaces/game-result.interface';
 
 @ApiTags('api/feed-game')
 @Controller('api/feed-game')
@@ -55,6 +56,59 @@ export class FeedGameController {
       submission_id: result.submission_id,
       comparison: result.comparison,
     };
+  }
+
+  /**
+   * @description Version 2: Submits player's answers to the remote scoring API.
+   * @param body - The submission payload from the frontend.
+   * @returns Processed result including mistakes,
+   * problem, summary, score, answered, answered_cor, percent and submission_id
+   * and comparison.
+   */
+  @Post('submit-answer-v2')
+  @ApiOperation({
+    summary: 'Submit comment answers and receive enhanced result',
+  })
+  @ApiBody({
+    type: SubmitResultsDto,
+    description:
+      'Submit a list of comment responses with response status and time',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Enhanced result returned after processing player answers',
+    schema: {
+      example: {
+        mistakes: [
+          [
+            "Maybe stick to doing something else, because this just doesn't work.",
+            'bullying',
+          ],
+          [
+            'I enjoyed watching, though some parts felt a bit slow.',
+            'positive',
+          ],
+        ],
+        problem: 'general negative',
+        summary:
+          'Growth Area: Detecting offensive behavior. You sometimes missed comments that were actually bullying.',
+        score: 5,
+        answered: 3,
+        answered_cor: 1,
+        percent: '33.3%',
+        submission_id: 144,
+        comparison: '14.2%',
+      },
+    },
+  })
+  async submitResultsV2(
+    @Body() body: SubmitResultsDto,
+  ): Promise<GameResultResponseV2> {
+    const result = await this.feedGameService.submitCommentAnswersV2(
+      body.submission,
+    );
+
+    return result;
   }
 
   /**
