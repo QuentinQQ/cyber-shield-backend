@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus, HttpException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { AxiosError } from 'axios';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +8,7 @@ import { throwError } from 'rxjs';
 import {
   GameResultRequest,
   GameResultResponse,
+  GameResultResponseV2,
 } from './interfaces/game-result.interface';
 import {
   RawApiResponse,
@@ -60,6 +61,53 @@ export class FeedGameService {
     } catch (error) {
       this.logger.error('submitCommentAnswers failed', error?.message || error);
       throw new Error('Failed to submit comment answers');
+    }
+  }
+
+  /**
+   * @description Submit player's answers to V2 remote API with enhanced feedback.
+   * @param submission - An array of submitted answers from the player.
+   * @returns Enhanced remote game result including mistakes, problem areas, and summary.
+   * @throws Error if remote API call fails.
+   */
+  async submitCommentAnswersV2(
+    submission: GameResultRequest['submission'],
+  ): Promise<GameResultResponseV2> {
+    const url = this.configService.get<string>('SUBMIT_ANSWERS_API_URL_V2');
+
+    if (!url) {
+      throw new Error(
+        'Missing SUBMIT_ANSWERS_API_URL_V2 in environment variables',
+      );
+    }
+
+    const body: GameResultRequest = { submission };
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post<GameResultResponseV2>(url, body).pipe(
+          timeout(5000),
+          catchError((error) => {
+            this.logger.error(
+              'Submit Answer V2 request failed',
+              error?.message || error,
+            );
+            return throwError(
+              () => new Error('Submit Answer V2 request failed'),
+            );
+          }),
+        ),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.error(
+        'submitCommentAnswersV2 failed',
+        error?.message || error,
+      );
+      throw new HttpException(
+        'Failed to submit comment answers to V2 API',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 

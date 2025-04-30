@@ -25,3 +25,18 @@ export interface GameResultResponse {
   submission_id: number;
   comparison: string;
 }
+
+/**
+ * @description Enhanced response structure returned by the V2 remote result API.
+ */
+export interface GameResultResponseV2 {
+  mistakes: [string, string][]; // [comment text, comment type]
+  problem: string;
+  summary: string;
+  score: number;
+  answered: number;
+  answered_cor: number;
+  percent: string;
+  submission_id: number;
+  comparison: string;
+}
