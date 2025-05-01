@@ -47,7 +47,7 @@ export class FeedGameService {
     try {
       const response = await firstValueFrom(
         this.httpService.post<GameResultResponse>(url, body).pipe(
-          timeout(5000),
+          timeout(10000),
           catchError((error) => {
             this.logger.error(
               'Remote API request failed',
@@ -86,7 +86,7 @@ export class FeedGameService {
     try {
       const response = await firstValueFrom(
         this.httpService.post<GameResultResponseV2>(url, body).pipe(
-          timeout(5000),
+          timeout(10000),
           catchError((error) => {
             this.logger.error(
               'Submit Answer V2 request failed',
@@ -105,7 +105,7 @@ export class FeedGameService {
         error?.message || error,
       );
       throw new HttpException(
-        'Failed to submit comment answers to V2 API',
+        'Failed to submit comment answers',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
