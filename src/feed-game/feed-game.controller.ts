@@ -121,4 +121,15 @@ export class FeedGameController {
   async getComments() {
     return this.feedGameService.getAllComments();
   }
+
+  /**
+   * @description Fetches a list of comments used in the game (existing logic).
+   * @returns A list of game feed comments.
+   */
+  @Get('get-all-comments-v2')
+  @ApiOperation({ summary: 'Get all game comments' })
+  @ApiResponse({ status: 200, description: 'List of comments returned' })
+  async getCommentsV2() {
+    return this.feedGameService.getAllCommentsV2();
+  }
 }

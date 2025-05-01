@@ -160,4 +160,56 @@ export class FeedGameService {
       };
     }
   }
+
+  /**
+   * @description Fetch all raw comments from remote API configured in environment.
+   * @returns An object with success status, data if available, message and HTTP status code.
+   */
+  async getAllCommentsV2(): Promise<{
+    success: boolean;
+    data?: RawComment[];
+    message: string;
+    statusCode: number;
+  }> {
+    try {
+      const apiUrl = this.configService.get<string>(
+        'GET_ALL_COMMENTS_API_URL_V2',
+      );
+
+      if (!apiUrl) {
+        return {
+          success: false,
+          message: 'API URL not configured',
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        };
+      }
+
+      const response = await firstValueFrom(
+        this.httpService.get<RawApiResponse>(apiUrl),
+      );
+
+      if (!response.data || !Array.isArray(response.data.Comments)) {
+        return {
+          success: false,
+          message: 'Invalid response format',
+          statusCode: HttpStatus.BAD_GATEWAY,
+        };
+      }
+
+      return {
+        success: true,
+        data: response.data.Comments,
+        message: 'Comments fetched successfully',
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error: unknown) {
+      const err = error as AxiosError;
+      this.logger.error('Failed to fetch comments', err.message);
+      return {
+        success: false,
+        message: err.message,
+        statusCode: err.response?.status ?? HttpStatus.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
 }
