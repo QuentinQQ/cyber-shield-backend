@@ -31,15 +31,19 @@ export class FeedGameService {
    * @description Submit player's answers to remote API and return result.
    * @param submission - An array of submitted answers from the player.
    * @returns Remote game result including score, percent correct, and comparison.
-   * @throws Error if remote API call fails.
+   * @throws HttpException with generic message if remote API call fails.
    */
   async submitCommentAnswers(
     submission: GameResultRequest['submission'],
   ): Promise<GameResultResponse> {
     const url = this.configService.get<string>('SUBMIT_ANSWERS_API_URL');
     if (!url) {
-      throw new Error(
-        'Missing SUBMIT_ANSWERS_API_URL in environment variables',
+      this.logger.error(
+        'Configuration error: SUBMIT_ANSWERS_API_URL is not set',
+      );
+      throw new HttpException(
+        'Unable to process submission',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
     const body: GameResultRequest = { submission };
@@ -48,19 +52,27 @@ export class FeedGameService {
       const response = await firstValueFrom(
         this.httpService.post<GameResultResponse>(url, body).pipe(
           timeout(10000),
-          catchError((error) => {
+          catchError((error: AxiosError) => {
             this.logger.error(
-              'Remote API request failed',
-              error?.message || error,
+              `Failed to submit answers to ${url}: ${
+                error.response?.status
+              } ${error.message}`,
+              error.stack,
             );
-            return throwError(() => new Error('Remote API request failed'));
+            return throwError(() => new Error('Request failed'));
           }),
         ),
       );
       return response.data;
     } catch (error) {
-      this.logger.error('submitCommentAnswers failed', error?.message || error);
-      throw new Error('Failed to submit comment answers');
+      this.logger.error(
+        'submitCommentAnswers failed',
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new HttpException(
+        'Unable to process submission',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -68,33 +80,35 @@ export class FeedGameService {
    * @description Submit player's answers to V2 remote API with enhanced feedback.
    * @param submission - An array of submitted answers from the player.
    * @returns Enhanced remote game result including mistakes, problem areas, and summary.
-   * @throws Error if remote API call fails.
+   * @throws HttpException with generic message if remote API call fails.
    */
   async submitCommentAnswersV2(
     submission: GameResultRequest['submission'],
   ): Promise<GameResultResponseV2> {
     const url = this.configService.get<string>('SUBMIT_ANSWERS_API_URL_V2');
-
     if (!url) {
-      throw new Error(
-        'Missing SUBMIT_ANSWERS_API_URL_V2 in environment variables',
+      this.logger.error(
+        'Configuration error: SUBMIT_ANSWERS_API_URL_V2 is not set',
+      );
+      throw new HttpException(
+        'Unable to process submission',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
-
     const body: GameResultRequest = { submission };
 
     try {
       const response = await firstValueFrom(
         this.httpService.post<GameResultResponseV2>(url, body).pipe(
           timeout(10000),
-          catchError((error) => {
+          catchError((error: AxiosError) => {
             this.logger.error(
-              'Submit Answer V2 request failed',
-              error?.message || error,
+              `Failed to submit answers to V2 API at ${url}: ${
+                error.response?.status
+              } ${error.message}`,
+              error.stack,
             );
-            return throwError(
-              () => new Error('Submit Answer V2 request failed'),
-            );
+            return throwError(() => new Error('Request failed'));
           }),
         ),
       );
@@ -102,10 +116,10 @@ export class FeedGameService {
     } catch (error) {
       this.logger.error(
         'submitCommentAnswersV2 failed',
-        error?.message || error,
+        error instanceof Error ? error.stack : String(error),
       );
       throw new HttpException(
-        'Failed to submit comment answers',
+        'Unable to process submission',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -123,24 +137,41 @@ export class FeedGameService {
   }> {
     try {
       const apiUrl = this.configService.get<string>('GET_ALL_COMMENTS_API_URL');
-
       if (!apiUrl) {
+        this.logger.error(
+          'Configuration error: GET_ALL_COMMENTS_API_URL is not set',
+        );
         return {
           success: false,
-          message: 'API URL not configured',
+          message: 'Unable to fetch comments',
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         };
       }
 
       const response = await firstValueFrom(
-        this.httpService.get<RawApiResponse>(apiUrl),
+        this.httpService.get<RawApiResponse>(apiUrl).pipe(
+          catchError((error: AxiosError) => {
+            this.logger.error(
+              `Failed to fetch comments from ${apiUrl}: ${
+                error.response?.status
+              } ${error.message}`,
+              error.stack,
+            );
+            return throwError(() => new Error('Request failed'));
+          }),
+        ),
       );
 
       if (!response.data || !Array.isArray(response.data.Comments)) {
+        this.logger.error(
+          `Invalid response format from ${apiUrl}: ${
+            response.data ? JSON.stringify(response.data) : 'No data'
+          }`,
+        );
         return {
           success: false,
-          message: 'Invalid response format',
-          statusCode: HttpStatus.BAD_GATEWAY,
+          message: 'Unable to fetch comments',
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         };
       }
 
@@ -152,17 +183,17 @@ export class FeedGameService {
       };
     } catch (error: unknown) {
       const err = error as AxiosError;
-      this.logger.error('Failed to fetch comments', err.message);
+      this.logger.error('Failed to fetch comments', err.stack || String(err));
       return {
         success: false,
-        message: err.message,
+        message: 'Unable to fetch comments',
         statusCode: err.response?.status ?? HttpStatus.INTERNAL_SERVER_ERROR,
       };
     }
   }
 
   /**
-   * @description Fetch all raw comments from remote API configured in environment.
+   * @description Fetch all raw comments from V2 remote API configured in environment.
    * @returns An object with success status, data if available, message and HTTP status code.
    */
   async getAllCommentsV2(): Promise<{
@@ -175,24 +206,41 @@ export class FeedGameService {
       const apiUrl = this.configService.get<string>(
         'GET_ALL_COMMENTS_API_URL_V2',
       );
-
       if (!apiUrl) {
+        this.logger.error(
+          'Configuration error: GET_ALL_COMMENTS_API_URL_V2 is not set',
+        );
         return {
           success: false,
-          message: 'API URL not configured',
+          message: 'Unable to fetch comments',
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         };
       }
 
       const response = await firstValueFrom(
-        this.httpService.get<RawApiResponse>(apiUrl),
+        this.httpService.get<RawApiResponse>(apiUrl).pipe(
+          catchError((error: AxiosError) => {
+            this.logger.error(
+              `Failed to fetch V2 comments from ${apiUrl}: ${
+                error.response?.status
+              } ${error.message}`,
+              error.stack,
+            );
+            return throwError(() => new Error('Request failed'));
+          }),
+        ),
       );
 
       if (!response.data || !Array.isArray(response.data.Comments)) {
+        this.logger.error(
+          `Invalid response format from ${apiUrl}: ${
+            response.data ? JSON.stringify(response.data) : 'No data'
+          }`,
+        );
         return {
           success: false,
-          message: 'Invalid response format',
-          statusCode: HttpStatus.BAD_GATEWAY,
+          message: 'Unable to fetch comments',
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         };
       }
 
@@ -204,10 +252,13 @@ export class FeedGameService {
       };
     } catch (error: unknown) {
       const err = error as AxiosError;
-      this.logger.error('Failed to fetch comments', err.message);
+      this.logger.error(
+        'Failed to fetch V2 comments',
+        err.stack || String(err),
+      );
       return {
         success: false,
-        message: err.message,
+        message: 'Unable to fetch comments',
         statusCode: err.response?.status ?? HttpStatus.INTERNAL_SERVER_ERROR,
       };
     }

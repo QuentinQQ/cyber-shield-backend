@@ -44,14 +44,18 @@ export class TextCheckerService {
 
     // Validate environment variables
     if (!url) {
-      throw new Error('Missing TEXT_CHECKER_API_URL in environment variables');
+      this.logger.error(
+        'Missing TEXT_CHECKER_API_URL in environment variables',
+      );
+      throw new Error('Internal server error.');
     }
 
     // Validate environment variables
     if (!token) {
-      throw new Error(
+      this.logger.error(
         'Missing TEXT_CHECKER_API_TOKEN in environment variables',
       );
+      throw new Error('Internal server error.');
     }
 
     try {
