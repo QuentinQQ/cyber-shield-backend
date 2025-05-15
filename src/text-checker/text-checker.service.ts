@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -25,6 +25,12 @@ interface TextCheckerApiResponse {
 export class TextCheckerService {
   private readonly logger = new Logger(TextCheckerService.name);
 
+  private readonly maliciousPatterns = [
+    /<script.*?>|javascript:|on\w+\s*=|eval\(|setTimeout|fetch\(|ajax\(|\.post\(|document\.cookie/i,
+    /\\x[0-9a-f]{2}|\\u[0-9a-f]{4}|\%[0-9a-f]{2}/i, // Coded Character Detection
+    /\[\s*\]\s*\[\s*\]|\{\s*\}\s*\.\s*constructor/i, // JavaScript Prototype contamination attempts
+  ];
+
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -39,23 +45,26 @@ export class TextCheckerService {
   async analyze(
     requestDto: TextCheckerAnalyzeRequestDto,
   ): Promise<TextCheckerAnalyzeResponseDto> {
+    const textToAnalyze = requestDto.text.trim();
+
+    // Check for malicious patterns in the input text
+    for (const pattern of this.maliciousPatterns) {
+      if (pattern.test(textToAnalyze)) {
+        this.logger.warn(
+          `Potential malicious content detected in text input: "${textToAnalyze.substring(0, 50)}..."`,
+        );
+        throw new BadRequestException(
+          'Input contains potentially harmful content',
+        );
+      }
+    }
+
     const url = this.configService.get<string>('TEXT_CHECKER_API_URL');
     const token = this.configService.get<string>('TEXT_CHECKER_API_TOKEN');
 
-    // Validate environment variables
-    if (!url) {
-      this.logger.error(
-        'Missing TEXT_CHECKER_API_URL in environment variables',
-      );
-      throw new Error('Internal server error.');
-    }
-
-    // Validate environment variables
-    if (!token) {
-      this.logger.error(
-        'Missing TEXT_CHECKER_API_TOKEN in environment variables',
-      );
-      throw new Error('Internal server error.');
+    if (!url || !token) {
+      this.logger.error('Missing required API configuration');
+      throw new Error('Internal server error. Please contact support.');
     }
 
     try {
@@ -63,7 +72,7 @@ export class TextCheckerService {
         this.httpService
           .post<TextCheckerApiResponse>(
             url,
-            { text: requestDto.text },
+            { text: textToAnalyze },
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -97,7 +106,12 @@ export class TextCheckerService {
       return result;
     } catch (error) {
       this.logger.error('Text analysis failed', error?.message || error);
-      throw new Error('Failed to analyze text');
+      // throw new Error('Failed to analyze text');
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new Error('Failed to analyze text. Please try again later.');
     }
   }
 }
