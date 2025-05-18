@@ -13,7 +13,7 @@ import { Request } from 'express';
 export class TextCheckerController {
   private readonly logger = new Logger(TextCheckerController.name);
 
-  constructor(private readonly textCheckerService: TextCheckerService) { }
+  constructor(private readonly textCheckerService: TextCheckerService) {}
 
   /**
    * @description Submits player's answers to the remote scoring API.
@@ -45,25 +45,52 @@ export class TextCheckerController {
     @Body() body: TextCheckerAnalyzeRequestDto,
     @Req() request: Request,
   ): Promise<TextCheckerAnalyzeResponseDto> {
+    const requestId = this.generateRequestId();
+    const startTime = Date.now();
+
     // Record the request information and enhance security monitoring
     const clientIp = request.ip || request.socket?.remoteAddress || 'Unknown';
     const origin = request.headers.origin || 'Unknown';
     const userAgent = request.headers['user-agent'] || 'Unknown';
+    const referer = request.headers.referer || 'None';
+    const contentType = request.headers['content-type'] || 'None';
+    const acceptLanguage = request.headers['accept-language'] || 'None';
 
     this.logger.log(
-      `Text analysis request | IP: ${clientIp} | Origin: ${origin} | Length: ${body.text.length}`,
+      `[${requestId}] Text analysis request | IP: ${clientIp} | Origin: ${origin} | Length: ${body.text.length} | User-Agent: ${userAgent} | Referer: ${referer} | Content-Type: ${contentType} | Accept-Language: ${acceptLanguage}`,
     );
 
     // Record suspicious user agents
     if (
       userAgent.includes('bot') ||
       userAgent.includes('curl') ||
-      userAgent.includes('wget')
+      userAgent.includes('wget') ||
+      userAgent.includes('python') ||
+      userAgent.includes('postman') ||
+      userAgent.includes('scanner')
     ) {
-      this.logger.warn(`Suspicious user-agent detected: ${userAgent}`);
+      this.logger.warn(
+        `[${requestId}] Suspicious user-agent detected: ${userAgent}`,
+      );
     }
 
-    return await this.textCheckerService.analyze(body);
+    try {
+      // Call the service for analysis
+      const result = await this.textCheckerService.analyze(body, requestId);
+
+      const processingTime = Date.now() - startTime;
+      this.logger.log(
+        `[${requestId}] Text analysis completed | Processing Time: ${processingTime}ms | Is Bullying: ${result.is_bullying} | Has Suggestion: ${!!result.suggested_text}`,
+      );
+
+      return result;
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      this.logger.error(
+        `[${requestId}] Text analysis failed | Processing Time: ${processingTime}ms | Error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
+    }
   }
 
   /**
@@ -98,24 +125,63 @@ export class TextCheckerController {
     @Body() body: TextCheckerAnalyzeRequestDto,
     @Req() request: Request,
   ): Promise<TextCheckerAnalyzeResponseV2Dto> {
+    const requestId = this.generateRequestId();
+    const startTime = Date.now();
+
     // Record the request information and enhance security monitoring
     const clientIp = request.ip || request.socket?.remoteAddress || 'Unknown';
     const origin = request.headers.origin || 'Unknown';
     const userAgent = request.headers['user-agent'] || 'Unknown';
+    const referer = request.headers.referer || 'None';
+    const contentType = request.headers['content-type'] || 'None';
+    const acceptLanguage = request.headers['accept-language'] || 'None';
 
     this.logger.log(
-      `Text analysis V2 request | IP: ${clientIp} | Origin: ${origin} | Length: ${body.text.length}`,
+      `[${requestId}] Text analysis V2 request | IP: ${clientIp} | Origin: ${origin} | Length: ${body.text.length} | User-Agent: ${userAgent} | Referer: ${referer} | Content-Type: ${contentType} | Accept-Language: ${acceptLanguage}`,
     );
 
     // Record suspicious user agents
     if (
       userAgent.includes('bot') ||
       userAgent.includes('curl') ||
-      userAgent.includes('wget')
+      userAgent.includes('wget') ||
+      userAgent.includes('python') ||
+      userAgent.includes('postman') ||
+      userAgent.includes('scanner')
     ) {
-      this.logger.warn(`Suspicious user-agent detected: ${userAgent}`);
+      this.logger.warn(
+        `[${requestId}] Suspicious user-agent detected: ${userAgent}`,
+      );
     }
 
-    return await this.textCheckerService.analyzeV2(body);
+    try {
+      // Call the service for analysis
+      const result = await this.textCheckerService.analyzeV2(body, requestId);
+
+      const processingTime = Date.now() - startTime;
+      this.logger.log(
+        `[${requestId}] Text analysis V2 completed | Processing Time: ${processingTime}ms | Zone: ${result.zone} | Bullying Level: ${result.bullying_level} | Likelihood: ${result.likelihood}`,
+      );
+
+      return result;
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      this.logger.error(
+        `[${requestId}] Text analysis V2 failed | Processing Time: ${processingTime}ms | Error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Generates a unique request ID for tracking
+   * @returns A string formatted as a UUID
+   */
+  private generateRequestId(): string {
+    return (
+      'req_' +
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15)
+    );
   }
 }

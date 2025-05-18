@@ -66,19 +66,27 @@ export class TextCheckerService {
   /**
    * @description Analyzes text for bullying content using external API
    * @param requestDto - The text to be analyzed
+   * @param requestId - Optional request ID for correlation in logs
    * @returns Analysis result with bullying detection and suggested alternative if applicable
    * @throws Error if remote API call fails
    */
   async analyze(
     requestDto: TextCheckerAnalyzeRequestDto,
+    requestId?: string,
   ): Promise<TextCheckerAnalyzeResponseDto> {
+    const logPrefix = requestId ? `[${requestId}]` : '';
+    const startTime = Date.now();
     const textToAnalyze = requestDto.text.trim();
+
+    this.logger.log(
+      `${logPrefix} Starting text analysis | Text length: ${textToAnalyze.length} | First 20 chars: "${textToAnalyze.substring(0, 20)}..."`,
+    );
 
     // Check for malicious patterns in the input text
     for (const pattern of this.maliciousPatterns) {
       if (pattern.test(textToAnalyze)) {
         this.logger.warn(
-          `Potential malicious content detected in text input: "${textToAnalyze.substring(0, 50)}..."`,
+          `${logPrefix} Potential malicious content detected in text input: "${textToAnalyze.substring(0, 50)}..."`,
         );
         throw new BadRequestException(
           'Input contains potentially harmful content',
@@ -90,11 +98,16 @@ export class TextCheckerService {
     const token = this.configService.get<string>('TEXT_CHECKER_API_TOKEN');
 
     if (!url || !token) {
-      this.logger.error('Missing required API configuration');
+      this.logger.error(`${logPrefix} Missing required API configuration`);
       throw new Error('Internal server error. Please contact support.');
     }
 
+    this.logger.log(
+      `${logPrefix} Sending request to external API | URL: ${url} | Text length: ${textToAnalyze.length}`,
+    );
+
     try {
+      const apiStartTime = Date.now();
       const response = await firstValueFrom(
         this.httpService
           .post<TextCheckerApiResponse>(
@@ -111,7 +124,7 @@ export class TextCheckerService {
             timeout(30000), // set 30 second timeout, this api needs a long time to process
             catchError((error: unknown) => {
               this.logger.error(
-                'Text analysis API request failed',
+                `${logPrefix} Text analysis API request failed`,
                 error instanceof Error ? error.message : String(error),
               );
               return throwError(
@@ -120,21 +133,34 @@ export class TextCheckerService {
             }),
           ),
       );
+      const apiDuration = Date.now() - apiStartTime;
 
-      // Log the full response for debugging purposes
-      this.logger.debug('Text analysis API response', response.data);
+      // Log the response details
+      const responseData = response.data;
+      this.logger.debug(
+        `${logPrefix} Text analysis API response | Duration: ${apiDuration}ms | Data: ${JSON.stringify(responseData)}`,
+      );
+
+      this.logger.log(
+        `${logPrefix} External API details | Duration: ${apiDuration}ms | Status: ${response.status} | Is Bullying: ${responseData.is_bullying} | Toxicity Score: ${responseData.toxicity_score} | Sentiment Score: ${responseData.sentiment_score} | Has Suggestion: ${!!responseData.suggested_text}`,
+      );
 
       // Create a properly typed response object
       const result: TextCheckerAnalyzeResponseDto = {
-        is_bullying: response.data.is_bullying === 'True',
-        suggested_text: response.data.suggested_text || undefined,
+        is_bullying: responseData.is_bullying === 'True',
+        suggested_text: responseData.suggested_text || undefined,
       };
+
+      const totalDuration = Date.now() - startTime;
+      this.logger.log(
+        `${logPrefix} Completed text analysis | Total Duration: ${totalDuration}ms | API Duration: ${apiDuration}ms | Result: ${JSON.stringify(result)}`,
+      );
 
       return result;
     } catch (error: unknown) {
+      const totalDuration = Date.now() - startTime;
       this.logger.error(
-        'Text analysis failed',
-        error instanceof Error ? error.message : String(error),
+        `${logPrefix} Text analysis failed | Duration: ${totalDuration}ms | Error: ${error instanceof Error ? error.message : String(error)}`,
       );
 
       if (error instanceof BadRequestException) {
@@ -147,19 +173,27 @@ export class TextCheckerService {
   /**
    * @description Analyzes text using the updated external API format
    * @param requestDto - The text to be analyzed
+   * @param requestId - Optional request ID for correlation in logs
    * @returns Analysis result with zone classification, likelihood, comment and suggested text
    * @throws Error if remote API call fails
    */
   async analyzeV2(
     requestDto: TextCheckerAnalyzeRequestDto,
+    requestId?: string,
   ): Promise<TextCheckerAnalyzeResponseV2Dto> {
+    const logPrefix = requestId ? `[${requestId}]` : '';
+    const startTime = Date.now();
     const textToAnalyze = requestDto.text.trim();
+
+    this.logger.log(
+      `${logPrefix} Starting text analysis V2 | Text length: ${textToAnalyze.length} | First 20 chars: "${textToAnalyze.substring(0, 20)}..."`,
+    );
 
     // Check for malicious patterns in the input text
     for (const pattern of this.maliciousPatterns) {
       if (pattern.test(textToAnalyze)) {
         this.logger.warn(
-          `Potential malicious content detected in text input: "${textToAnalyze.substring(0, 50)}..."`,
+          `${logPrefix} Potential malicious content detected in text input: "${textToAnalyze.substring(0, 50)}..."`,
         );
         throw new BadRequestException(
           'Input contains potentially harmful content',
@@ -171,11 +205,16 @@ export class TextCheckerService {
     const token = this.configService.get<string>('TEXT_CHECKER_API_TOKEN');
 
     if (!url || !token) {
-      this.logger.error('Missing required API V2 configuration');
+      this.logger.error(`${logPrefix} Missing required API V2 configuration`);
       throw new Error('Internal server error. Please contact support.');
     }
 
+    this.logger.log(
+      `${logPrefix} Sending request to external API V2 | URL: ${url} | Text length: ${textToAnalyze.length}`,
+    );
+
     try {
+      const apiStartTime = Date.now();
       const response = await firstValueFrom(
         this.httpService
           .post<TextCheckerApiResponseV2>(
@@ -192,7 +231,7 @@ export class TextCheckerService {
             timeout(30000), // set 30 second timeout, this api needs a long time to process
             catchError((error: unknown) => {
               this.logger.error(
-                'Text analysis V2 API request failed',
+                `${logPrefix} Text analysis V2 API request failed`,
                 error instanceof Error ? error.message : String(error),
               );
               return throwError(
@@ -201,24 +240,43 @@ export class TextCheckerService {
             }),
           ),
       );
+      const apiDuration = Date.now() - apiStartTime;
 
-      // Log the full response for debugging purposes
-      this.logger.debug('Text analysis V2 API response', response.data);
+      // Log the response details
+      const responseData = response.data;
+      this.logger.debug(
+        `${logPrefix} Text analysis V2 API response | Duration: ${apiDuration}ms | Data: ${JSON.stringify(responseData)}`,
+      );
+
+      this.logger.log(
+        `${logPrefix} External API V2 details | Duration: ${apiDuration}ms | Status: ${response.status} | Zone: ${responseData.zone} | Likelihood: ${responseData.likelihood} | Has Suggestion: ${responseData.suggested_text !== 'None'}`,
+      );
+
+      // Map zone to bullying level
+      const bullyingLevel = this.mapZoneToBullyingLevel(responseData.zone);
+      this.logger.log(
+        `${logPrefix} Mapped zone "${responseData.zone}" to bullying level: ${bullyingLevel}`,
+      );
 
       // Create a properly typed response object and map zone to bullying_level
       const result: TextCheckerAnalyzeResponseV2Dto = {
-        zone: response.data.zone,
-        likelihood: response.data.likelihood,
-        comment: response.data.comment,
-        suggested_text: response.data.suggested_text,
-        bullying_level: this.mapZoneToBullyingLevel(response.data.zone),
+        zone: responseData.zone,
+        likelihood: responseData.likelihood,
+        comment: responseData.comment,
+        suggested_text: responseData.suggested_text,
+        bullying_level: bullyingLevel,
       };
+
+      const totalDuration = Date.now() - startTime;
+      this.logger.log(
+        `${logPrefix} Completed text analysis V2 | Total Duration: ${totalDuration}ms | API Duration: ${apiDuration}ms | Result: ${JSON.stringify(result)}`,
+      );
 
       return result;
     } catch (error: unknown) {
+      const totalDuration = Date.now() - startTime;
       this.logger.error(
-        'Text analysis V2 failed',
-        error instanceof Error ? error.message : String(error),
+        `${logPrefix} Text analysis V2 failed | Duration: ${totalDuration}ms | Error: ${error instanceof Error ? error.message : String(error)}`,
       );
 
       if (error instanceof BadRequestException) {
