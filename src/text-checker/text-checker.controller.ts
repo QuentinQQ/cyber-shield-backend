@@ -4,6 +4,7 @@ import { TextCheckerService } from './text-checker.service';
 import { TextCheckerAnalyzeRequestDto } from './dto/text-checker-analyze-request.dto';
 import { Throttle } from '@nestjs/throttler';
 import { TextCheckerAnalyzeResponseDto } from './dto/text-checker-analyze-response.dto';
+import { TextCheckerAnalyzeResponseV2Dto } from './dto/text-checker-analyze-response-v2.dto';
 import { Request } from 'express';
 
 @ApiTags('api/text-checker')
@@ -12,7 +13,7 @@ import { Request } from 'express';
 export class TextCheckerController {
   private readonly logger = new Logger(TextCheckerController.name);
 
-  constructor(private readonly textCheckerService: TextCheckerService) {}
+  constructor(private readonly textCheckerService: TextCheckerService) { }
 
   /**
    * @description Submits player's answers to the remote scoring API.
@@ -25,7 +26,7 @@ export class TextCheckerController {
   })
   @ApiBody({
     type: TextCheckerAnalyzeRequestDto,
-    description: 'Submit  a string of text to be analyzed for bullying content',
+    description: 'Submit a string of text to be analyzed for bullying content',
   })
   @ApiResponse({
     status: 200,
@@ -63,5 +64,58 @@ export class TextCheckerController {
     }
 
     return await this.textCheckerService.analyze(body);
+  }
+
+  /**
+   * @description Submits text to the updated remote API with enhanced response format.
+   * @param body - The text submission payload from the frontend.
+   * @returns Enhanced result including zone classification, likelihood, comment, and suggested text.
+   */
+  @Post('analyze-v2')
+  @ApiOperation({
+    summary: 'Submit requested text and receive enhanced analysis result',
+  })
+  @ApiBody({
+    type: TextCheckerAnalyzeRequestDto,
+    description:
+      'Submit a string of text to be analyzed for bullying content with enhanced feedback',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Enhanced analysis result with zone classification, likelihood, and feedback',
+    type: TextCheckerAnalyzeResponseV2Dto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
+  async analyzeTextV2(
+    @Body() body: TextCheckerAnalyzeRequestDto,
+    @Req() request: Request,
+  ): Promise<TextCheckerAnalyzeResponseV2Dto> {
+    // Record the request information and enhance security monitoring
+    const clientIp = request.ip || request.socket?.remoteAddress || 'Unknown';
+    const origin = request.headers.origin || 'Unknown';
+    const userAgent = request.headers['user-agent'] || 'Unknown';
+
+    this.logger.log(
+      `Text analysis V2 request | IP: ${clientIp} | Origin: ${origin} | Length: ${body.text.length}`,
+    );
+
+    // Record suspicious user agents
+    if (
+      userAgent.includes('bot') ||
+      userAgent.includes('curl') ||
+      userAgent.includes('wget')
+    ) {
+      this.logger.warn(`Suspicious user-agent detected: ${userAgent}`);
+    }
+
+    return await this.textCheckerService.analyzeV2(body);
   }
 }
