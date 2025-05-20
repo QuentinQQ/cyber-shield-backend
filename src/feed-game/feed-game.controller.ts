@@ -43,7 +43,7 @@ export class FeedGameController {
       },
     },
   })
-  async submitResults(@Body() body: SubmitResultsDto): Promise<any> {
+  async submitResults(@Body() body: SubmitResultsDto) {
     const result = await this.feedGameService.submitCommentAnswers(
       body.submission,
     );
