@@ -1,28 +1,156 @@
-import { Controller, Get, Post, Body, Req, HttpException, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { Request } from 'express';
-import { Session } from 'express-session'; // ADDED: Import Session type
+import { Body, Controller, Get, Param, Post, Req, HttpException, HttpStatus } from '@nestjs/common';
 import { FeedGameService } from './feed-game.service';
-// UPDATED: Import new DTOs and interfaces
-import { GameResultRequestDto } from './dto/game-result.dto';
+import { SubmitResultsDto } from './dto/submit-results.dto'; // LEGACY
+import { GameResultRequestDto } from './dto/game-result.dto'; // NEW
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { Request } from 'express';
+import { Session } from 'express-session';
+import { GameResultResponseV2 } from './interfaces/game-result.interface'; // Legacy
 import { 
   FrontendCommentResponse 
-} from './interfaces/get-all-comments.interface';
+} from './interfaces/get-all-comments.interface'; // New
 import { 
   GameResultResponse, 
-  GameResultResponseV2,
   FrontendGameResultRequest 
 } from './interfaces/game-result.interface';
-import { GameSessionData } from './interfaces/game-session.interface'; // ADDED: Import GameSessionData
+import { GameSessionData } from './interfaces/game-session.interface';
 
-@ApiTags('Feed Game')
-@Controller('feed-game')
+@ApiTags('api/feed-game') // LEGACY
+@Controller('api/feed-game') // LEGACY
+@Throttle({ default: { ttl: 60000, limit: 60 } }) // LEGACY
 export class FeedGameController {
   constructor(private readonly feedGameService: FeedGameService) {}
+  /**
+   * LEGACY
+   * @description Submits player's answers to the remote scoring API.
+   * @param body - The submission payload from the frontend.
+   * @returns Processed result including score, correctness and ranking.
+   */
+  @Post('submit-answer')
+  @ApiOperation({ summary: 'Submit comment answers and receive result' })
+  @ApiBody({
+    type: SubmitResultsDto,
+    description:
+      'Submit a list of comment responses with response status and time',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Result returned after processing player answers',
+    schema: {
+      example: {
+        score: 5,
+        answered: 2,
+        answered_correct: 1,
+        percent: '50.0%',
+        submission_id: 20,
+        comparison: '76.5%',
+      },
+    },
+  })
+  async submitResults(@Body() body: SubmitResultsDto) {
+    const result = await this.feedGameService.submitCommentAnswers(
+      body.submission,
+    );
+
+    return {
+      score: result.score,
+      answered: result.answered,
+      answered_correct: result.answered_cor,
+      percent: result.percent,
+      submission_id: result.submission_id,
+      comparison: result.comparison,
+    };
+  }
 
   /**
+   * LEGACY
+   * @description Version 2: Submits player's answers to the remote scoring API.
+   * @param body - The submission payload from the frontend.
+   * @returns Processed result including mistakes,
+   * problem, summary, score, answered, answered_cor, percent and submission_id
+   * and comparison.
+   */
+  @Post('submit-answer-v2')
+  @ApiOperation({
+    summary: 'Submit comment answers and receive enhanced result',
+  })
+  @ApiBody({
+    type: SubmitResultsDto,
+    description:
+      'Submit a list of comment responses with response status and time',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Enhanced result returned after processing player answers',
+    schema: {
+      example: {
+        mistakes: [
+          [
+            "Maybe stick to doing something else, because this just doesn't work.",
+            'bullying',
+          ],
+          [
+            'I enjoyed watching, though some parts felt a bit slow.',
+            'positive',
+          ],
+        ],
+        problem: 'general negative',
+        summary:
+          'Growth Area: Detecting offensive behavior. You sometimes missed comments that were actually bullying.',
+        score: 5,
+        answered: 3,
+        answered_cor: 1,
+        percent: '33.3%',
+        submission_id: 144,
+        comparison: '14.2%',
+      },
+    },
+  })
+  async submitResultsV2(
+    @Body() body: SubmitResultsDto,
+  ): Promise<GameResultResponseV2> {
+    const result = await this.feedGameService.submitCommentAnswersV2(
+      body.submission,
+    );
+
+    return result;
+  }
+
+  /**
+   * LEGACY
+   * @description Fetches a list of comments used in the game (existing logic).
+   * @returns A list of game feed comments.
+   */
+  @Get('get-all-comments')
+  @ApiOperation({ summary: 'Get all game comments' })
+  @ApiResponse({ status: 200, description: 'List of comments returned' })
+  async getComments() {
+    return this.feedGameService.getAllComments();
+  }
+
+  /**
+   * LEGACY
+   * @description Fetches a list of comments used in the game (existing logic).
+   * @returns A list of game feed comments.
+   */
+  @Get('get-all-comments-v2')
+  @ApiOperation({ summary: 'Get all game comments' })
+  @ApiResponse({ status: 200, description: 'List of comments returned' })
+  async getCommentsV2() {
+    return this.feedGameService.getAllCommentsV2();
+  }
+
+
+  /**
+   * For new feature version
    * Get all comments with session-based ID obfuscation
-   * MODIFIED: Now uses session management and returns obfuscated IDs
    */
   @Get('comments')
   @ApiOperation({ 
@@ -53,7 +181,6 @@ export class FeedGameController {
   })
   async getAllComments(@Req() request: Request & { session: Session & { gameData?: GameSessionData } }): Promise<FrontendCommentResponse> {
     try {
-      // MODIFIED: Use new session-based method
       return await this.feedGameService.getCommentsWithSession(request.session);
     } catch (error) {
       throw new HttpException(
@@ -64,8 +191,8 @@ export class FeedGameController {
   }
 
   /**
+   * For new feature version
    * Submit comment answers with session validation
-   * MODIFIED: Now validates session and uses obfuscated IDs from frontend
    */
   @Post('submit')
   @ApiOperation({ 
@@ -104,18 +231,15 @@ export class FeedGameController {
     @Req() request: Request & { session: Session & { gameData?: GameSessionData } },
   ): Promise<GameResultResponse> {
     try {
-      // NEW: Convert DTO to interface for service layer
       const frontendRequest: FrontendGameResultRequest = {
         submission: gameResultRequest.submission,
       };
 
-      // MODIFIED: Pass session for validation and ID mapping
-      return await this.feedGameService.submitCommentAnswers(
+      return await this.feedGameService.submitCommentAnswersWithSession(
         frontendRequest,
         request.session
       );
     } catch (error) {
-      // NEW: Enhanced error handling with specific status codes
       if (error.message.includes('No active game session')) {
         throw new HttpException(error.message, HttpStatus.UNAUTHORIZED);
       }
@@ -131,8 +255,8 @@ export class FeedGameController {
   }
 
   /**
+   * New feature version
    * Submit comment answers using V2 API with enhanced response
-   * MODIFIED: Same session validation as V1 with enhanced response format
    */
   @Post('submit-v2')
   @ApiOperation({ 
@@ -181,18 +305,15 @@ export class FeedGameController {
     @Req() request: Request & { session: Session & { gameData?: GameSessionData } },
   ): Promise<GameResultResponseV2> {
     try {
-      // NEW: Convert DTO to interface (same as V1)
       const frontendRequest: FrontendGameResultRequest = {
         submission: gameResultRequest.submission,
       };
 
-      // MODIFIED: Use V2 service method with session validation
-      return await this.feedGameService.submitCommentAnswersV2(
+      return await this.feedGameService.submitCommentAnswersV2WithSession(
         frontendRequest,
         request.session
       );
     } catch (error) {
-      // NEW: Same error handling as V1
       if (error.message.includes('No active game session')) {
         throw new HttpException(error.message, HttpStatus.UNAUTHORIZED);
       }
