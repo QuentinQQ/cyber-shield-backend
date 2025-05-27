@@ -4,33 +4,63 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as express from 'express';
+import * as session from 'express-session';
+import { RedisStore } from "connect-redis"
+import Redis from 'ioredis';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.use(helmet());
+  // Redis connection and setup
+  const redisClient = new Redis("rediss://default:AXLDAAIjcDEwYzRiZTJkMWVlNjE0MDQ1YjZhMGE4OGIxNWEwMWM2N3AxMA@pleased-sloth-29379.upstash.io:6379");
+  // Redis connection event listeners
+  redisClient.on('connect', () => {
+    console.log('✅ Redis connected successfully');
+  });
 
+  redisClient.on('ready', () => {
+    console.log('✅ Redis is ready to receive commands');
+  });
+
+  redisClient.on('error', (err) => {
+    console.error('❌ Redis connection error:', err.message);
+  });
+
+  redisClient.on('close', () => {
+    console.log('⚠️ Redis connection closed');
+  });
+  // Initialize store.
+  const redisStore = new RedisStore({
+    client: redisClient,
+    prefix: "feedgame:sess:",
+  })
+
+
+  app.use(helmet());
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
-  // const allowedOrigins = [
-  //   'https://cyber-shield-frontend.pages.dev',
-  //   'https://worldwecreated.org',
-  // ];
 
-  // app.enableCors({
-  //   origin: (origin, callback) => {
-  //     if (!origin || allowedOrigins.includes(origin)) {
-  //       callback(null, true);
-  //     } else {
-  //       callback(new Error('Not allowed by CORS'));
-  //     }
-  //   },
-  //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  //   allowedHeaders: ['Content-Type', 'X-Api-Key'],
-  //   credentials: false,
-  // });
+  // Initialize session storage - MOVE: Put this after helmet but before CORS
+  app.use(
+    session({
+      store: redisStore,
+      resave: false, // required: force lightweight session keep alive (touch)
+      saveUninitialized: false, // recommended: only save session when data exists
+      secret: process.env.SESSION_SECRET || "keyboard cat",
+      name: 'fgid',
+      cookie: {
+        maxAge: 1000 * 60 * 30, // 30 minutes expiry
+        httpOnly: true, // Security
+        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+        sameSite: 'lax', // CSRF protection
+      },
+      rolling: true, // Reset expiry on each request
+    }),
+  );
+
   app.enableCors({
     origin: '*',
+    credentials: true,
   });
 
   app.useGlobalPipes(new ValidationPipe());

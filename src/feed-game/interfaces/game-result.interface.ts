@@ -1,18 +1,51 @@
 /**
- * @description Represents a single comment response submitted by a player.
+ * LEGACY
+ * @description Represents a single comment response submitted by a player (legacy version).
  */
-export interface SubmissionItem {
+export interface LegacySubmissionItem {
   comment_id: number;
   response_status: 'like' | 'dislike';
   response_time: number; // in milliseconds
 }
 
+
 /**
- * @description Request payload sent to the remote result API.
+ * NEW
+ * @description Represents a single comment response submitted by a player (new version).
+ */
+export interface SubmissionItem {
+  comment_id: string;
+  response_status: 'like' | 'dislike';
+  response_time: number;
+}
+
+/**
+ * NEW
+ * @description Internal submission item with real database IDs
+ */
+export interface InternalSubmissionItem {
+  comment_id: number; // Real database ID
+  response_status: 'like' | 'dislike';
+  response_time: number;
+}
+
+
+/**
+ * LEGACY
+ * @description Request payload sent to the remote result API (legacy version).
  */
 export interface GameResultRequest {
-  submission: SubmissionItem[];
+  submission: InternalSubmissionItem[];
 }
+
+/**
+ * NEW
+ * @description Frontend request payload with obfuscated IDs
+ */
+export interface FrontendGameResultRequest {
+  submission: SubmissionItem[]; // NEW: 使用混淆ID的提交项
+}
+
 
 /**
  * @description Response structure returned by the remote result API.
