@@ -13,3 +13,21 @@ export interface RawComment {
 export interface RawApiResponse {
   Comments: RawComment[];
 }
+
+/**
+ * @description Frontend-safe comment structure with mapped IDs
+ */
+export interface FrontendComment {
+  comment_id: string;
+  comment_text: string;
+  comment_fake_name: string;
+}
+
+/**
+ * @description Response structure for frontend comment requests
+ */
+export interface FrontendCommentResponse {
+  comments: FrontendComment[];
+  session_id: string;
+  total_questions: number;
+}
